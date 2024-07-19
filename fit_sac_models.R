@@ -1,16 +1,8 @@
 
 library(foreach)
 library(tidyverse)
-library(patchwork)
 library(MCMCvis)
 library(rstan)
-library(doSNOW)
-library(ggrepel)
-library(rstanarm)
-
-
-# Install with devtools::install_github("hrbrmstr/ggalt")
-library(ggalt)
 
 empe_sites <- read.csv("data/empe_sites_new.csv")
 sites_update <- read.csv("data/colony_attributes_update.csv")
@@ -18,6 +10,7 @@ sites_update <- read.csv("data/colony_attributes_update.csv")
 data_pop <- readRDS("data/data_pop_empe.rds")
 
 theme_set(theme_bw())
+
 
 # Load environmental data -------------------------------------------------
 
@@ -76,11 +69,12 @@ dat_lm <- list(y = N_data$mean,
 
 res_lm <- stan(file = 'lm2.stan', 
                  data = dat_lm,
-                 iter = 4000,
+                 iter = 5000,
                  cores = 4,
                  control = list(adapt_delta = 0.9999, 
                                 max_treedepth = 20))
 
+if (!"results"  %in% list.files()) dir.create("results")
 saveRDS(res_lm, "results/results_sac.rds")
 
 dat_lm2 <- list(y = N_data$mean,
@@ -101,22 +95,22 @@ MCMCsummary(res_lm, params = "Rsq")
 
 # Univariate plots
 y1 <- MCMCsummary(res_lm, params = "mu_pred")
-y1_mean <- exp(y1[,1])
-y1_min <- exp(y1[,3])
-y1_max <- exp(y1[,5])
+y1_mean <- y1[,1]
+y1_min <- y1[,3]
+y1_max <- y1[,5]
 
-x_pred1 <- exp(seq(min(x1), max(x1), length.out = 100))
+x_pred1 <- seq(min(x1), max(x1), length.out = 100)
 
 ggplot() +
   geom_ribbon(aes(x = x_pred1, ymin = y1_min, ymax = y1_max), alpha = 0.8, 
               fill = "grey") +
   geom_segment(aes(x = env_mat[,1], xend = env_mat[,1], 
-                   y = exp(N_data$min), yend = exp(N_data$max))) +
+                   y = N_data$min, yend = N_data$max)) +
   geom_line(aes(x = x_pred1, y = y1_mean), col = "darkorange", size = 1.5, 
             linetype = 2) +
-  geom_point(aes(x = env_mat[,1], y = exp(N_data$mean)), alpha= 0.8, 
+  geom_point(aes(x = env_mat[,1], y = N_data$mean), alpha= 0.8, 
              color = "darkorange", size = 3) +
-  geom_point(aes(x = env_mat[,1], y = exp(N_data$mean)), shape = 1, size = 3, 
+  geom_point(aes(x = env_mat[,1], y = N_data$mean), shape = 1, size = 3, 
              stroke = 1.1) +
   labs(y = "Colony Abundance (log)", x = "SIC (Laying)") +
   theme(#axis.title.y = element_blank(),
@@ -125,9 +119,9 @@ ggplot() +
     panel.grid.minor = element_blank())
 
 y2 <- MCMCsummary(res_lm2, params = "mu_pred")
-y2_mean <- exp(y1[,1])
-y2_min <- exp(y1[,3])
-y2_max <- exp(y1[,5])
+y2_mean <- y1[,1]
+y2_min <- y1[,3]
+y2_max <- y1[,5]
 
 x_pred2 <- seq(min(x2), max(x2), length.out = 100)*sd(env_mat[,1]) + 
   mean(env_mat[,1])
@@ -136,12 +130,12 @@ ggplot() +
   geom_ribbon(aes(x = x_pred2, ymin = y2_min, ymax = y2_max), alpha = 0.8, 
               fill = "grey") +
   geom_segment(aes(x = env_mat[,1], xend = env_mat[,1], 
-                   y = exp(N_data$min), yend = exp(N_data$max))) +
+                   y = N_data$min, yend = N_data$max)) +
   geom_line(aes(x = x_pred2, y = y2_mean), col = "darkorange", size = 1.5, 
             linetype = 2) +
-  geom_point(aes(x = env_mat[,1], y = exp(N_data$mean)), alpha= 0.8, 
+  geom_point(aes(x = env_mat[,1], y = N_data$mean), alpha= 0.8, 
              color = "darkorange", size = 3) +
-  geom_point(aes(x = env_mat[,1], y = exp(N_data$mean)), shape = 1, size = 3, 
+  geom_point(aes(x = env_mat[,1], y = N_data$mean), shape = 1, size = 3, 
              stroke = 1.1) +
   labs(y = "Colony Abundance (log)", x = "SIC (Laying)") +
   theme(#axis.title.y = element_blank(),
@@ -149,30 +143,28 @@ ggplot() +
     #panel.grid.major = element_blank()) +
     panel.grid.minor = element_blank())
 
-(0.001 - mean(env_mat[,1]))/sd(env_mat[,1])
-
 
 # Models with temporal process variance -----------------------------------
 
-N_annual <- readRDS("data/N_annual.rds")
-N_annual <- N_annual[-which(N_annual$mean == 0),]
+#N_annual <- readRDS("data/N_annual.rds")
+#N_annual <- N_annual[-which(N_annual$mean == 0),]
 
-z_idx <- which(is.nan(N_annual$mean))
+#z_idx <- which(is.nan(N_annual$mean))
 
-x1c <- foreach(i = 1:10, .combine = "cbind") %do% x1
+#x1c <- foreach(i = 1:10, .combine = "cbind") %do% x1
 
-dat_lm3 <- list(y = N_annual$mean,
-               y_sd = N_annual$sd,
-               N = 50,
-               X = x1,
-               T = 10,
-               K = nrow(N_annual),
-               site_no = N_annual$site_number,
-               year_no = N_annual$year - 2008)
+#dat_lm3 <- list(y = N_annual$mean,
+               #y_sd = N_annual$sd,
+               #N = 50,
+               #X = x1,
+               #T = 10,
+               #K = nrow(N_annual),
+               #site_no = N_annual$site_number,
+               #year_no = N_annual$year - 2008)
 
-res_lm3 <- stan(file = 'lm3.stan', 
-               data = dat_lm3,
-               iter = 4000,
-               cores = 4,
-               control = list(adapt_delta = 0.9999, 
-                              max_treedepth = 20))
+#res_lm3 <- stan(file = 'lm3.stan', 
+               #data = dat_lm3,
+               #iter = 4000,
+               #cores = 4,
+               #control = list(adapt_delta = 0.9999, 
+                              #max_treedepth = 20))

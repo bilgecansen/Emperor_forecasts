@@ -9,6 +9,7 @@ res_sac <- read_rds("results/results_sac.rds")
 
 param_chains <- MCMCchains(res_sac, params = c("alpha", "beta"))
 
+set.seed(19)
 idx <- sample(1:nrow(param_chains), 100)
 
 b0 <- param_chains[idx,"alpha"]
@@ -46,7 +47,6 @@ N_global <- foreach(i = 1:50) %:%
 N_global <- map(N_global, function(x) do.call(rbind, x))
 
 # Plots
-
 plot_empe <- function(y_pred_chains) {
   
   chains_dat <- foreach(i = 1:50, .combine = "rbind") %do%
