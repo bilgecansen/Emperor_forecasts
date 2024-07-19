@@ -4,10 +4,25 @@ library(foreach)
 library(tidyverse)
 library(truncnorm)
 
+# Site id info
+data_site1 <- readRDS("data/data_env_empe.rds") %>%
+  filter(site_id %in% unique(data_pop$sat$site_id)) %>%
+  filter(year >= 2009 & year <= 2018) %>%
+  arrange(site_id) %>%
+  select(site_id) %>%
+  unique()
+
+data_site2 <- readRDS("data/data_env_empe.rds") %>%
+  filter(year >= 2009 & year <= 2018) %>%
+  arrange(site_id) %>% 
+  select(site_id) %>%
+  unique()
+
+
 # Parameter chains 
 res_sac <- read_rds("results/results_sac.rds")
 
-param_chains <- MCMCchains(res_sac, params = c("alpha", "beta"))
+param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "sigma"))
 
 set.seed(19)
 idx <- sample(1:nrow(param_chains), 100)
@@ -15,16 +30,26 @@ idx <- sample(1:nrow(param_chains), 100)
 b0 <- param_chains[idx,"alpha"]
 b1 <- param_chains[idx,"beta"]
 
+# Site effects
 eps <- MCMCchains(res_sac, params = c("eps"), exact = F)
 eps <- eps[idx,]
-
+colnames(eps) <- data_site1$site_id
+ 
+## Generate 0 site effects for colonies not in the original data 
 #s_s <- rtruncnorm(100, a = 0, mean = 0, sd = param_chains[idx,"sigma"])
+#e_s <- rnorm(100*16, 0, s_s) %>% 
+  #matrix(ncol = 16, nrow = 100)
+e_s <- matrix(0, ncol = 16, nrow = 100)
+idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
+colnames(e_s) <- unique(data_site2$site_id)[idx_site]
+
+## Combine site effects
+eps2 <- cbind(eps, e_s)
+idx_site2 <- order(colnames(eps2)) 
+eps2 <- eps2[,idx_site2]
 
 # Forecast and hindcast
 env <- readRDS("data/data_coupled_transformed.rds")
-
-#e_s <- rnorm(100*nrow(env[[1]])*ncol(env[[1]]), 0, s_s) %>%
-  #array(dim = c(nrow(env[[1]]), ncol(env[[1]]), 100))
 
 N <- foreach(i = 1:length(env)) %do% {
   
@@ -33,7 +58,7 @@ N <- foreach(i = 1:length(env)) %do% {
   
   foreach(h = 1:100) %:% 
     foreach(k = 1:nrow(x), .combine = "rbind") %do% {
-      b0[h] + b1[h]*x[k,] + eps[h,k]
+      b0[h] + b1[h]*x[k,] + eps2[h,k]
     }
 }
 
