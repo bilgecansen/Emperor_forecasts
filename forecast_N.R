@@ -4,6 +4,9 @@ library(foreach)
 library(tidyverse)
 library(truncnorm)
 
+data_pop <- readRDS("data/data_pop_empe.rds")
+env <- readRDS("data/data_coupled_transformed.rds")
+
 # Site id info
 data_site1 <- readRDS("data/data_env_empe.rds") %>%
   filter(site_id %in% unique(data_pop$sat$site_id)) %>%
@@ -17,7 +20,6 @@ data_site2 <- readRDS("data/data_env_empe.rds") %>%
   arrange(site_id) %>% 
   select(site_id) %>%
   unique()
-
 
 # Parameter chains 
 res_sac <- read_rds("results/results_sac.rds")
@@ -40,8 +42,8 @@ colnames(eps) <- data_site1$site_id
 #e_s <- rnorm(100*16, 0, s_s) %>% 
   #matrix(ncol = 16, nrow = 100)
 e_s <- matrix(0, ncol = 16, nrow = 100)
-idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
-colnames(e_s) <- unique(data_site2$site_id)[idx_site]
+#idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
+#colnames(e_s) <- unique(data_site2$site_id)[idx_site]
 
 ## Combine site effects
 eps2 <- cbind(eps, e_s)
@@ -49,12 +51,11 @@ idx_site2 <- order(colnames(eps2))
 eps2 <- eps2[,idx_site2]
 
 # Forecast and hindcast
-env <- readRDS("data/data_coupled_transformed.rds")
-
 N <- foreach(i = 1:length(env)) %do% {
   
-  x <- log(env[[i]])
+  x <- env[[i]]
   x[x == 0] <- 0.0001
+  x <- log(x)
   
   foreach(h = 1:100) %:% 
     foreach(k = 1:nrow(x), .combine = "rbind") %do% {
