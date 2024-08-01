@@ -22,7 +22,7 @@ data_site2 <- readRDS("data/data_env_empe.rds") %>%
   unique()
 
 # Parameter chains 
-res_sac <- read_rds("results/results_sac.rds")
+res_sac <- readRDS("results/results_sac.rds")
 
 param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "sigma"))
 
@@ -42,8 +42,8 @@ colnames(eps) <- data_site1$site_id
 #e_s <- rnorm(100*16, 0, s_s) %>% 
   #matrix(ncol = 16, nrow = 100)
 e_s <- matrix(0, ncol = 16, nrow = 100)
-#idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
-#colnames(e_s) <- unique(data_site2$site_id)[idx_site]
+idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
+colnames(e_s) <- unique(data_site2$site_id)[idx_site]
 
 ## Combine site effects
 eps2 <- cbind(eps, e_s)

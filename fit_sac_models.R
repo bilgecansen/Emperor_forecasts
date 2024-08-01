@@ -14,6 +14,8 @@ theme_set(theme_bw())
 
 # Load environmental data -------------------------------------------------
 
+sites_all <- unique(readRDS("data/data_env_empe.rds")$site_id)
+
 data_esm <- readRDS("data/data_env_empe.rds") %>%
   filter(site_id %in% unique(data_pop$sat$site_id)) %>%
   filter(year >= 2009 & year <= 2018) %>%
@@ -77,6 +79,25 @@ res_lm <- stan(file = 'lm2.stan',
 if (!"results"  %in% list.files()) dir.create("results")
 saveRDS(res_lm, "results/results_sac.rds")
 
+# Create posterior csv files
+param_chains <- MCMCchains(res_lm, params = c("alpha", "beta"))
+write.csv(param_chains, "results/param_chains.csv")
+
+## Site effects
+eps <- MCMCchains(res_sac, params = c("eps"), exact = F)
+colnames(eps) <- unique(data_esm$site_id)
+
+e_s <- matrix(0, ncol = 16, nrow = nrow(eps))
+idx_site <- which(!sites_all %in% unique(data_esm$site_id))
+colnames(e_s) <- sites_all[idx_site]
+
+## Combine site effects
+eps2 <- cbind(eps, e_s)
+idx_site2 <- order(colnames(eps2)) 
+eps2 <- eps2[,idx_site2]
+write.csv(eps2, "results/eps_chains.csv")
+
+# Model with standardization
 dat_lm2 <- list(y = N_data$mean,
                y_sd = N_data$sd,
                N = 50,
@@ -142,29 +163,3 @@ ggplot() +
     panel.border = element_blank(), 
     #panel.grid.major = element_blank()) +
     panel.grid.minor = element_blank())
-
-
-# Models with temporal process variance -----------------------------------
-
-#N_annual <- readRDS("data/N_annual.rds")
-#N_annual <- N_annual[-which(N_annual$mean == 0),]
-
-#z_idx <- which(is.nan(N_annual$mean))
-
-#x1c <- foreach(i = 1:10, .combine = "cbind") %do% x1
-
-#dat_lm3 <- list(y = N_annual$mean,
-               #y_sd = N_annual$sd,
-               #N = 50,
-               #X = x1,
-               #T = 10,
-               #K = nrow(N_annual),
-               #site_no = N_annual$site_number,
-               #year_no = N_annual$year - 2008)
-
-#res_lm3 <- stan(file = 'lm3.stan', 
-               #data = dat_lm3,
-               #iter = 4000,
-               #cores = 4,
-               #control = list(adapt_delta = 0.9999, 
-                              #max_treedepth = 20))
