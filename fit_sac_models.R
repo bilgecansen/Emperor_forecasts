@@ -35,7 +35,7 @@ env_mat_std <- apply(env_mat, 2, function(x) (x - mean(x))/sd(x))
 
 # Fit linear regression ---------------------------------------------------
 
-#N_chains <- readRDS("data/N_chains.rds")
+N_chains <- readRDS("data/N_chains.rds")
 #N_mean_chains <- foreach(i = 1:50, .combine = "cbind") %do% {
   #z <- t(apply(N_chains[,seq(i, 500, 50)], 1, function(x) {
     #as.vector(mean(x[which(x != 0)]))
@@ -56,35 +56,47 @@ env_mat_std <- apply(env_mat, 2, function(x) (x - mean(x))/sd(x))
                      #site_id = sites_update$site_id)
 #N_data <- N_data[order(N_data$site_id),]
 
-N_data <- readRDS("data/N_data.rds")
+#N_data <- readRDS("data/N_data.rds")
+
+z_mean <- apply(N_chains, 2, function(x) mean(log(x[x!=0])))
+z_sd <- apply(N_chains, 2, function(x) sd(log(x[x!=0])))
+
+N_annual_log <- data.frame(z_mean = z_mean,
+                           z_sd = z_sd,
+                           site_id = rep(sites_update$site_id, 10))
+
+N_annual_log <- N_annual_log[order(N_annual_log$site_id),]
 
 x1 <- log(env_mat[,1])
 x2 <- env_mat_std[,1]
 
-dat_lm <- list(y = N_data$mean,
-               y_sd = N_data$sd,
-               N = 50,
-               X = x1,
-               X_pred = seq(min(x1), max(x1), length.out = 100),
-               S = nrow(env_mat),
-               L = 100)
+idx <- which(!is.nan(N_annual_log$mean))
 
-res_lm <- stan(file = 'lm2.stan', 
+dat_lm <- list(y = dat$z_mean[idx], 
+               y_sd = dat$z_sd[idx], 
+               N = 50,
+               T = 10,
+               K = nrow(N_annual[idx,]),
+               X = x1,
+               site_no = as.numeric(as.factor(N_annual$site_id[idx])),
+               year_no = N_annual$year[idx] - 2008)
+
+res_lm <- stan(file = 'lm5.stan', 
                  data = dat_lm,
-                 iter = 5000,
+                 iter = 2000,
                  cores = 4,
-                 control = list(adapt_delta = 0.9999, 
-                                max_treedepth = 20))
+                 control = list(adapt_delta = 0.99, 
+                                max_treedepth = 15))
 
 if (!"results"  %in% list.files()) dir.create("results")
-saveRDS(res_lm, "results/results_sac.rds")
+saveRDS(res_lm, "results/results_sac2.rds")
 
 # Create posterior csv files
-param_chains <- MCMCchains(res_lm, params = c("alpha", "beta"))
+param_chains <- MCMCchains(res_lm, params = c("alpha", "beta", "sigma_time"))
 write.csv(param_chains, "results/param_chains.csv")
 
 ## Site effects
-eps <- MCMCchains(res_sac, params = c("eps"), exact = F)
+eps <- MCMCchains(res_lm, params = c("eps"), exact = F)
 colnames(eps) <- unique(data_esm$site_id)
 
 e_s <- matrix(0, ncol = 16, nrow = nrow(eps))
@@ -96,23 +108,6 @@ eps2 <- cbind(eps, e_s)
 idx_site2 <- order(colnames(eps2)) 
 eps2 <- eps2[,idx_site2]
 write.csv(eps2, "results/eps_chains.csv")
-
-# Model with standardization
-dat_lm2 <- list(y = N_data$mean,
-               y_sd = N_data$sd,
-               N = 50,
-               X = x2,
-               X_pred = seq(min(x2), max(x2), length.out = 100),
-               S = nrow(env_mat),
-               L = 100)
-
-res_lm2 <- stan(file = 'lm2.stan', 
-               data = dat_lm2,
-               iter = 4000,
-               cores = 4)
-
-# Model fit
-MCMCsummary(res_lm, params = "Rsq")
 
 # Univariate plots
 y1 <- MCMCsummary(res_lm, params = "mu_pred")

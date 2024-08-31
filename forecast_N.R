@@ -22,15 +22,20 @@ data_site2 <- readRDS("data/data_env_empe.rds") %>%
   unique()
 
 # Parameter chains 
-res_sac <- readRDS("results/results_sac.rds")
+res_sac <- readRDS("results/results_sac2.rds")
 
-param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "sigma"))
+param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "sigma_time"))
 
-set.seed(19)
+#set.seed(19)
 idx <- sample(1:nrow(param_chains), 100)
 
 b0 <- param_chains[idx,"alpha"]
 b1 <- param_chains[idx,"beta"]
+sg <- param_chains[idx, -c(1,2)]
+sg_mean <- apply(sg, 2, mean)
+
+colnames(sg) <- data_site1$site_id
+names(sg_mean) <- data_site1$site_id
 
 # Site effects
 eps <- MCMCchains(res_sac, params = c("eps"), exact = F)
@@ -38,9 +43,6 @@ eps <- eps[idx,]
 colnames(eps) <- data_site1$site_id
  
 ## Generate 0 site effects for colonies not in the original data 
-#s_s <- rtruncnorm(100, a = 0, mean = 0, sd = param_chains[idx,"sigma"])
-#e_s <- rnorm(100*16, 0, s_s) %>% 
-  #matrix(ncol = 16, nrow = 100)
 e_s <- matrix(0, ncol = 16, nrow = 100)
 idx_site <- which(!unique(data_site2$site_id) %in% data_site1$site_id)
 colnames(e_s) <- unique(data_site2$site_id)[idx_site]
@@ -49,6 +51,17 @@ colnames(e_s) <- unique(data_site2$site_id)[idx_site]
 eps2 <- cbind(eps, e_s)
 idx_site2 <- order(colnames(eps2)) 
 eps2 <- eps2[,idx_site2]
+
+## Set min variability to sites with no observation
+sg2 <-  matrix(min(sg_mean), ncol = 16, nrow = 100)
+colnames(sg2) <- unique(data_site2$site_id)[idx_site]
+sg3 <- cbind(sg, sg2)
+sg3 <- sg3[, order(colnames(sg3))]
+
+sg_mean2 <- c(sg_mean, rep(min(sg_mean), 16))
+names(sg_mean2)[51:66] <- unique(data_site2$site_id)[idx_site]
+sg_mean2 <- sg_mean2[order(names(sg_mean2))]
+
 
 # Forecast and hindcast
 N <- foreach(i = 1:length(env)) %do% {
@@ -59,7 +72,9 @@ N <- foreach(i = 1:length(env)) %do% {
   
   foreach(h = 1:100) %:% 
     foreach(k = 1:nrow(x), .combine = "rbind") %do% {
-      b0[h] + b1[h]*x[k,] + eps2[h,k]
+      
+      e_t <- rnorm(ncol(x), 0, sg3[h,k])
+      b0[h] + b1[h]*x[k,] + eps2[h,k] + e_t
     }
 }
 
