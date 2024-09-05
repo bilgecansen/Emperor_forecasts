@@ -24,18 +24,19 @@ data_site2 <- readRDS("data/data_env_empe.rds") %>%
 # Parameter chains 
 res_sac <- readRDS("results/results_sac2.rds")
 
-param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "sigma_time"))
+param_chains <- MCMCchains(res_sac, params = c("alpha", "beta", "mu_sigma", 
+                                               "sigma_time"))
 
 #set.seed(19)
 idx <- sample(1:nrow(param_chains), 100)
 
 b0 <- param_chains[idx,"alpha"]
 b1 <- param_chains[idx,"beta"]
-sg <- param_chains[idx, -c(1,2)]
-sg_mean <- apply(sg, 2, mean)
+sg <- param_chains[idx, -c(1:3)]
+sg_mean <- param_chains[idx, "mu_sigma"]
 
 colnames(sg) <- data_site1$site_id
-names(sg_mean) <- data_site1$site_id
+#names(sg_mean) <- data_site1$site_id
 
 # Site effects
 eps <- MCMCchains(res_sac, params = c("eps"), exact = F)
@@ -52,15 +53,15 @@ eps2 <- cbind(eps, e_s)
 idx_site2 <- order(colnames(eps2)) 
 eps2 <- eps2[,idx_site2]
 
-## Set min variability to sites with no observation
-sg2 <-  matrix(min(sg_mean), ncol = 16, nrow = 100)
+## Set mean variability to sites with no observation
+sg2 <-  matrix(sg_mean, ncol = 16, nrow = 100)
 colnames(sg2) <- unique(data_site2$site_id)[idx_site]
 sg3 <- cbind(sg, sg2)
 sg3 <- sg3[, order(colnames(sg3))]
 
-sg_mean2 <- c(sg_mean, rep(min(sg_mean), 16))
-names(sg_mean2)[51:66] <- unique(data_site2$site_id)[idx_site]
-sg_mean2 <- sg_mean2[order(names(sg_mean2))]
+#sg_mean2 <- c(sg_mean, rep(min(sg_mean), 16))
+#names(sg_mean2)[51:66] <- unique(data_site2$site_id)[idx_site]
+#sg_mean2 <- sg_mean2[order(names(sg_mean2))]
 
 
 # Forecast and hindcast
