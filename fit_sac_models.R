@@ -70,18 +70,16 @@ N_annual_log <- N_annual_log[order(N_annual_log$site_id),]
 x1 <- log(env_mat[,1])
 x2 <- env_mat_std[,1]
 
-idx <- which(!is.nan(N_annual_log$mean))
+idx <- which(!is.nan(N_annual_log$z_mean))
 
-dat_lm <- list(y = dat$z_mean[idx], 
-               y_sd = dat$z_sd[idx], 
+dat_lm <- list(y = N_annual_log$z_mean[idx], 
+               y_sd = N_annual_log$z_sd[idx], 
                N = 50,
-               T = 10,
-               K = nrow(N_annual[idx,]),
+               K = nrow(N_annual_log[idx,]),
                X = x1,
-               site_no = as.numeric(as.factor(N_annual$site_id[idx])),
-               year_no = N_annual$year[idx] - 2008)
+               site_no = as.numeric(as.factor(N_annual_log$site_id[idx])))
 
-res_lm <- stan(file = 'lm5.stan', 
+res_lm <- stan(file = 'lm6.stan', 
                  data = dat_lm,
                  iter = 2000,
                  cores = 4,
@@ -90,6 +88,15 @@ res_lm <- stan(file = 'lm5.stan',
 
 if (!"results"  %in% list.files()) dir.create("results")
 saveRDS(res_lm, "results/results_sac2.rds")
+
+# Model Checking
+MCMCsummary(res_lm, params = c("mean_gt", "sd_gt"))
+MCMCtrace(res_lm, params = "alpha", priors = rnorm(4000, 0, 20), pdf = F)
+MCMCtrace(res_lm, params = "beta", priors = rnorm(4000, 0, 10), pdf = F)
+MCMCtrace(res_lm, params = "mu_sigma", 
+          priors = rtruncnorm(4000, 0, 5), pdf = F)
+MCMCtrace(res_lm, params = "tau", 
+          priors = rtruncnorm(4000, 0, 5), pdf = F)
 
 # Create posterior csv files
 param_chains <- MCMCchains(res_lm, params = c("alpha", "beta", "sigma_time"))
