@@ -94,8 +94,8 @@ plot_empe <- function(y_pred_chains) {
   chains_dat <- foreach(i = 1:50, .combine = "rbind") %do%
     y_pred_chains[[i]]
   
-  y_max <- apply(chains_dat, 2, quantile, 0.995)
-  y_min <- apply(chains_dat, 2, quantile, 0.005)
+  y_max <- apply(chains_dat, 2, max)
+  y_min <- apply(chains_dat, 2, min)
   
   dat_ci <- data.frame(year = 1909:2100,
                        max = y_max,
