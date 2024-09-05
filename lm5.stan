@@ -2,9 +2,7 @@
 data {
   int<lower=0> N;
   int<lower=0> K;
-  //int<lower=0> T;
   int<lower=0> site_no[K];
-  int<lower=0> year_no[K];
   vector[N] X;
   real<lower=0> y[K];
   vector[K] y_sd;
@@ -13,23 +11,20 @@ data {
 parameters {
   real alpha;
   real beta;
-  //real<lower=0> mu_sigma;
+  real<lower=0> mu_sigma;
   real<lower=0> sigma_site;
   real<lower=0> sigma_time[N];
-  //real<lower=0> tau;
-  //real sigma_raw_time[N];
+  real<lower=0> tau;
   real y_raw_time[K];
   real y_raw_site[N];
 }
 
 transformed parameters {
   real y_mu[N];
-  //real<lower=0> sigma_time[N];
   real eps_site[N];
   real y_lat[K];
   
   for (i in 1:N) {
-    //sigma_time[i] = mu_sigma + sigma_raw_time[i]*tau;
     eps_site[i] = y_raw_site[i]*sigma_site;
     y_mu[i] = X[i]*beta + alpha + eps_site[i];
   }
@@ -41,16 +36,31 @@ transformed parameters {
 
 model {
   
-  //sigma_raw_time ~ normal(0, 1);
   y_raw_site ~ normal(0, 1);
   y_raw_time ~ normal(0, 1);
-  //mu_sigma ~ normal(0, 1);
-  //tau ~ normal(0, 1);
-  sigma_time ~ normal(0,0.5);
-  alpha ~ normal(9, 2);
-  beta ~ normal(0, 1);
+  mu_sigma ~ normal(0, 5);
+  tau ~ normal(0, 5);
+  alpha ~ normal(0, 20);
+  beta ~ normal(0, 10);
+  
+  sigma_time ~ normal(mu_sigma, tau);
   
   for (i in 1:K){
     y[i] ~ normal(y_lat[i], y_sd[i]);
   } 
+}
+
+generated quantities {
+  
+  int<lower = 0, upper = 1> mean_gt;
+  int<lower = 0, upper = 1> sd_gt;
+  vector[K] y_rep;
+  
+  for (i in 1:K) {
+    y_rep[i] = normal_rng(y_lat[i], y_sd[i]);
+  }
+  
+  mean_gt = mean(y_rep) > mean(y);
+  sd_gt = sd(y_rep) > sd(y);
+  
 }
