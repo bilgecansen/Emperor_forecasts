@@ -36,15 +36,18 @@ env_mat_std <- apply(env_mat, 2, function(x) (x - mean(x))/sd(x))
 # Fit linear regression ---------------------------------------------------
 
 N_chains <- readRDS("data/N_chains.rds")
-#N_mean_chains <- foreach(i = 1:50, .combine = "cbind") %do% {
-  #z <- t(apply(N_chains[,seq(i, 500, 50)], 1, function(x) {
-    #as.vector(mean(x[which(x != 0)]))
-  #}))
-  
-  #as.vector(z)
-#}
 
-#N_mean <- apply(N_mean_chains, 2, mean)
+## this is used only for R2 calculation
+N_mean_chains <- foreach(i = 1:50, .combine = "cbind") %do% {
+  z <- t(apply(N_chains[,seq(i, 500, 50)], 1, function(x) {
+    as.vector(mean(log(x[which(x != 0)])))
+  }))
+  
+  as.vector(z)
+}
+
+N_mean <- apply(N_mean_chains, 2, mean)
+
 #N_sd <- apply(N_mean_chains, 2, sd)
 #N_min <- apply(N_mean_chains, 2, quantile, 0.05)
 #N_max <- apply(N_mean_chains, 2, quantile, 0.95)
@@ -66,6 +69,7 @@ N_annual_log <- data.frame(z_mean = z_mean,
                            site_id = rep(sites_update$site_id, 10))
 
 N_annual_log <- N_annual_log[order(N_annual_log$site_id),]
+y_mean <- N_mean[order(sites_update$site_id)]
 
 x1 <- log(env_mat[,1])
 x2 <- env_mat_std[,1]
@@ -73,15 +77,17 @@ x2 <- env_mat_std[,1]
 idx <- which(!is.nan(N_annual_log$z_mean))
 
 dat_lm <- list(y = N_annual_log$z_mean[idx], 
-               y_sd = N_annual_log$z_sd[idx], 
+               y_sd = N_annual_log$z_sd[idx],
+               y_mean = y_mean,
                N = 50,
                K = nrow(N_annual_log[idx,]),
                X = x1,
                site_no = as.numeric(as.factor(N_annual_log$site_id[idx])))
 
-res_lm <- stan(file = 'lm6.stan', 
+res_lm <- stan(file = 'lm5.stan', 
                  data = dat_lm,
-                 iter = 2000,
+                 iter = 5000,
+                 thin = 2,
                  cores = 4,
                  control = list(adapt_delta = 0.99, 
                                 max_treedepth = 15))
@@ -91,15 +97,18 @@ saveRDS(res_lm, "results/results_sac2.rds")
 
 # Model Checking
 MCMCsummary(res_lm, params = c("mean_gt", "sd_gt"))
-MCMCtrace(res_lm, params = "alpha", priors = rnorm(4000, 0, 20), pdf = F)
-MCMCtrace(res_lm, params = "beta", priors = rnorm(4000, 0, 10), pdf = F)
+MCMCtrace(res_lm, params = "alpha", priors = rnorm(5000, 0, 20), pdf = F)
+MCMCtrace(res_lm, params = "beta", priors = rnorm(5000, 0, 10), pdf = F)
 MCMCtrace(res_lm, params = "mu_sigma", 
-          priors = rtruncnorm(4000, 0, 5), pdf = F)
+          priors = rtruncnorm(5000, 0, 5), pdf = F)
 MCMCtrace(res_lm, params = "tau", 
-          priors = rtruncnorm(4000, 0, 5), pdf = F)
+          priors = rtruncnorm(5000, 0, 5), pdf = F)
+MCMCtrace(res_lm, params = "sigma_site", 
+          priors = rtruncnorm(5000, 0, 10), pdf = F)
 
 # Create posterior csv files
-param_chains <- MCMCchains(res_lm, params = c("alpha", "beta", "sigma_time"))
+param_chains <- MCMCchains(res_lm, params = c("alpha", "beta", "mu_sigma", 
+                                              "sigma_time"))
 write.csv(param_chains, "results/param_chains.csv")
 
 ## Site effects
@@ -117,49 +126,22 @@ eps2 <- eps2[,idx_site2]
 write.csv(eps2, "results/eps_chains.csv")
 
 # Univariate plots
-y1 <- MCMCsummary(res_lm, params = "mu_pred")
+y1 <- MCMCsummary(res_lm, params = "mu")
 y1_mean <- y1[,1]
 y1_min <- y1[,3]
 y1_max <- y1[,5]
 
-x_pred1 <- seq(min(x1), max(x1), length.out = 100)
-
 ggplot() +
-  geom_ribbon(aes(x = x_pred1, ymin = y1_min, ymax = y1_max), alpha = 0.8, 
+  geom_ribbon(aes(x = x1, ymin = y1_min, ymax = y1_max), alpha = 0.8, 
               fill = "grey") +
-  geom_segment(aes(x = env_mat[,1], xend = env_mat[,1], 
-                   y = N_data$min, yend = N_data$max)) +
-  geom_line(aes(x = x_pred1, y = y1_mean), col = "darkorange", size = 1.5, 
+  #geom_segment(aes(x = env_mat[,1], xend = env_mat[,1], 
+                   #y = N_annual_log$min, yend = N_annual_log$max)) +
+  geom_line(aes(x = x1, y = y1_mean), col = "darkorange", size = 1.5, 
             linetype = 2) +
-  geom_point(aes(x = env_mat[,1], y = N_data$mean), alpha= 0.8, 
-             color = "darkorange", size = 3) +
-  geom_point(aes(x = env_mat[,1], y = N_data$mean), shape = 1, size = 3, 
-             stroke = 1.1) +
-  labs(y = "Colony Abundance (log)", x = "SIC (Laying)") +
-  theme(#axis.title.y = element_blank(),
-    panel.border = element_blank(), 
-    #panel.grid.major = element_blank()) +
-    panel.grid.minor = element_blank())
-
-y2 <- MCMCsummary(res_lm2, params = "mu_pred")
-y2_mean <- y1[,1]
-y2_min <- y1[,3]
-y2_max <- y1[,5]
-
-x_pred2 <- seq(min(x2), max(x2), length.out = 100)*sd(env_mat[,1]) + 
-  mean(env_mat[,1])
-
-ggplot() +
-  geom_ribbon(aes(x = x_pred2, ymin = y2_min, ymax = y2_max), alpha = 0.8, 
-              fill = "grey") +
-  geom_segment(aes(x = env_mat[,1], xend = env_mat[,1], 
-                   y = N_data$min, yend = N_data$max)) +
-  geom_line(aes(x = x_pred2, y = y2_mean), col = "darkorange", size = 1.5, 
-            linetype = 2) +
-  geom_point(aes(x = env_mat[,1], y = N_data$mean), alpha= 0.8, 
-             color = "darkorange", size = 3) +
-  geom_point(aes(x = env_mat[,1], y = N_data$mean), shape = 1, size = 3, 
-             stroke = 1.1) +
+  #geom_point(aes(x = env_mat[,1], y = N_annual_log$mean), alpha= 0.8, 
+             #color = "darkorange", size = 3) +
+  #geom_point(aes(x = env_mat[,1], y = N_annual_log$mean), shape = 1, size = 3, 
+             #stroke = 1.1) +
   labs(y = "Colony Abundance (log)", x = "SIC (Laying)") +
   theme(#axis.title.y = element_blank(),
     panel.border = element_blank(), 
