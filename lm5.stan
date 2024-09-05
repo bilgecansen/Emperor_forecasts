@@ -5,6 +5,7 @@ data {
   int<lower=0> site_no[K];
   vector[N] X;
   real<lower=0> y[K];
+  vector[N] y_mean;
   vector[K] y_sd;
 }
 
@@ -42,6 +43,7 @@ model {
   tau ~ normal(0, 5);
   alpha ~ normal(0, 20);
   beta ~ normal(0, 10);
+  sigma_site ~ normal(0,5);
   
   sigma_time ~ normal(mu_sigma, tau);
   
@@ -51,6 +53,19 @@ model {
 }
 
 generated quantities {
+  real Rsq;
+  vector[N] res;
+  vector[N] error;
+  vector[N] mu;
+  
+  mu = X*beta + alpha;
+  
+  for (i in 1:N) {
+    res[i] = (mu[i]- mean(y_mean))^2;
+    error[i] = (y_mean[i] - mu[i])^2;
+  }
+  
+  Rsq = (sum(res)/(N-1))/((sum(res)/(N-1)) + (sum(error)/(N-1)));
   
   int<lower = 0, upper = 1> mean_gt;
   int<lower = 0, upper = 1> sd_gt;
